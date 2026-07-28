@@ -85,6 +85,7 @@ type model struct {
 	expanded   map[string]struct{}
 	sort       proc.SortKey
 	pinned     bool
+	paused     bool
 	filter     string
 	mode       mode
 	confirm    *confirmState
@@ -158,7 +159,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tickMsg:
-		if m.busy {
+		if m.paused || m.busy {
 			return m, m.tickCmd()
 		}
 		m.busy = true
@@ -217,6 +218,12 @@ func (m model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	// Layout: 0 header, 1 rule, 2 columns, 3.. body
 	const colRow = 2
 	const bodyStart = 3
+	if msg.Y == 0 && m.canTogglePause() {
+		if hl := m.headerLayout(); msg.X >= hl.stateStart && msg.X < hl.stateEnd {
+			return m.togglePause()
+		}
+		return m, nil
+	}
 	if msg.Y == colRow {
 		if key, ok := m.colLayout().hit(msg.X); ok {
 			m.reorder(key)
@@ -356,6 +363,59 @@ func (m model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (m *model) held() bool {
 	return m.pinned || m.cursor > 0 || len(m.selected) > 0 || m.mode != modeList
+}
+
+func (m model) stateText() string {
+	if m.paused {
+		return "⏸  paused"
+	}
+	if m.held() {
+		if m.pinned {
+			return "pinned"
+		}
+		return "held"
+	}
+	return "⬤ live"
+}
+
+func (m model) headerRightPlain() string {
+	right := fmt.Sprintf("  %s · sort %s", m.stateText(), m.sort)
+	if m.filter != "" {
+		right += " · /" + m.filter
+	}
+	return right
+}
+
+func (m model) renderState(stateText string, color lipgloss.Color) string {
+	return lipgloss.NewStyle().Bold(true).Foreground(color).Render(stateText)
+}
+
+func (m model) canTogglePause() bool {
+	return m.mode == modeList && (m.paused || !m.held())
+}
+
+type headerLayout struct {
+	stateStart int
+	stateEnd   int
+}
+
+func (m model) headerLayout() headerLayout {
+	right := m.headerRightPlain()
+	state := m.stateText()
+	rightW := lipgloss.Width(right)
+	stateW := lipgloss.Width(state)
+	// state sits after two leading spaces on the right segment
+	start := m.width - rightW + 2
+	return headerLayout{stateStart: start, stateEnd: start + stateW}
+}
+
+func (m model) togglePause() (tea.Model, tea.Cmd) {
+	m.paused = !m.paused
+	if !m.paused {
+		m.busy = true
+		return m, tea.Batch(m.sampleCmd(), m.tickCmd())
+	}
+	return m, nil
 }
 
 func (m *model) applySample(procs []proc.Proc) {
@@ -758,16 +818,21 @@ func (m model) View() string {
 }
 
 func (m model) header() string {
+	stateText := m.stateText()
+	rightPlain := m.headerRightPlain()
+	rightW := lipgloss.Width(rightPlain)
+
 	title := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("5")).Render("hk")
-	state := lipgloss.NewStyle().Foreground(lipgloss.Color("2")).Render("● live")
-	if m.held() {
-		label := "held"
-		if m.pinned {
-			label = "pinned"
-		}
-		state = lipgloss.NewStyle().Foreground(lipgloss.Color("3")).Render("⏸ " + label)
+	var state string
+	switch {
+	case m.paused:
+		state = m.renderState(stateText, lipgloss.Color("3"))
+	case m.held():
+		state = m.renderState(stateText, lipgloss.Color("3"))
+	default:
+		state = m.renderState(stateText, lipgloss.Color("2"))
 	}
-	right := lipgloss.NewStyle().Faint(true).Render(fmt.Sprintf("%s · sort %s", state, m.sort))
+	right := lipgloss.NewStyle().Faint(true).Render(fmt.Sprintf("  %s · sort %s", state, m.sort))
 	if m.filter != "" {
 		right += lipgloss.NewStyle().Faint(true).Render(" · /" + m.filter)
 	}
@@ -804,10 +869,16 @@ func (m model) header() string {
 		render.Bar(memRatio, 10),
 		loadStr,
 	)
+	const headerGap = 4
+	titlePrefix := "hk  "
+	maxStatsW := m.width - lipgloss.Width(titlePrefix) - rightW - headerGap
+	if maxStatsW > 0 && lipgloss.Width(stats) > maxStatsW {
+		stats = strings.TrimSpace(render.Fit(stats, maxStatsW))
+	}
 	left := title + "  " + stats
-	gap := m.width - lipgloss.Width(left) - lipgloss.Width(right)
-	if gap < 1 {
-		gap = 1
+	gap := m.width - lipgloss.Width(left) - rightW
+	if gap < headerGap {
+		gap = headerGap
 	}
 	return left + strings.Repeat(" ", gap) + right
 }
@@ -944,8 +1015,9 @@ func (m model) helpBody(height int) string {
 		"  view      " + bkey("/", "") + " filter · " + bkey("s", "ort") + " cycle · " + bkey("c", "pu") + " · " + bkey("m", "em") + " · " + bkey("p", "in") + " · " + bkey("q", "uit"),
 		"            click column headers (NAME / CPU / MEMORY / PROCS) to sort",
 		"",
-		"  order     ● live only at top with nothing selected",
-		"            ⏸ held when you move — numbers update, rows stay",
+		"  order     live only at top with nothing selected",
+		"            click live / paused in the header to pause or resume",
+		"            held when you move — numbers update, rows stay",
 		"",
 		"  risk      critical / system / you — never blocks a kill",
 		"",
