@@ -54,7 +54,17 @@ mise run ci           # tidy + test + build
 mise run test:smoke   # hk top -n 5
 ```
 
-Release: tag with `svu` (see `.svu.yml`), then goreleaser (`.goreleaser.yaml`).
+## Release
+
+Tools: `go`, `goreleaser`, `svu` in `mise.toml`. Tags via svu (`.svu.yml`: no `v` prefix, `v0`).
+
+```bash
+mise install
+mise release          # svu next + goreleaser (needs GITHUB_TOKEN)
+mise release patch    # or major | minor | next
+```
+
+CI: `.github/workflows/autorelease.yml` runs `mise run ci` on push/PR to `master`. Manual workflow_dispatch with patch/minor/major runs `mise release <bump>`.
 
 ## License
 

@@ -8,6 +8,10 @@ svu = "3.3.0"
 description = "Download Go module deps"
 run = "go mod tidy && go get -v ./..."
 
+[tasks.format]
+description = "Format Go packages"
+run = "go fmt ./..."
+
 [tasks.build]
 description = "Build hk binary"
 run = "go build -o bin/hk ./cmd/hk"
@@ -22,14 +26,26 @@ depends = ["build"]
 run = "./bin/hk top -n 5"
 
 [tasks.ci]
-description = "tidy + test + build"
-run = "go mod tidy && go test -count=1 ./... && go build -o bin/hk ./cmd/hk"
-
-[tasks.release]
-description = "Tag next version with svu and run goreleaser"
+description = "tidy + format check + test + build"
 run = """
 set -euo pipefail
-next="$(svu next)"
-git tag "$next"
-goreleaser release --clean
+go mod tidy
+test -z "$(gofmt -l .)"
+go test -count=1 ./...
+go build -o bin/hk ./cmd/hk
 """
+
+[tasks.release]
+description = "Tag with svu and publish via goreleaser"
+depends = ["ci"]
+usage = '''
+arg "<version>" help="New version" {
+  choices "next" "major" "minor" "patch"
+  default "next"
+}
+'''
+run = '''
+set -euo pipefail
+git tag "$(svu ${usage_version})"
+goreleaser release --clean
+'''
