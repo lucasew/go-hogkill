@@ -28,7 +28,6 @@ run = "./bin/hk top -n 5"
 [tasks.ci]
 description = "tidy + format check + test + build"
 run = """
-set -euo pipefail
 go mod tidy
 test -z "$(gofmt -l .)"
 go test -count=1 ./...
@@ -45,7 +44,6 @@ arg "<version>" help="New version" {
 }
 '''
 run = '''
-set -euo pipefail
 git tag "$(svu ${usage_version})"
 goreleaser release --clean
 '''
