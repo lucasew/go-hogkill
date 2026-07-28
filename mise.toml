@@ -4,46 +4,80 @@ go = "1.26.5"
 goreleaser = "2.17.0"
 svu = "3.3.0"
 
-[tasks.install]
-description = "Download Go module deps"
-run = "go mod tidy && go get -v ./..."
+[tasks."install:tidy"]
+description = "Tidy go.mod and go.sum"
+run = "go mod tidy"
 
-[tasks.format]
+[tasks."install:download"]
+description = "Download module dependencies"
+run = "go mod download"
+
+[tasks.install]
+description = "Tidy and download Go modules"
+depends = ["install:*"]
+
+[tasks."fmt:go"]
 description = "Format Go packages"
 run = "go fmt ./..."
 
-[tasks.build]
-description = "Build hk binary"
-run = "go build -o bin/hk ./cmd/hk"
+[tasks.fmt]
+description = "Format all"
+depends = ["fmt:*"]
 
-[tasks.test]
-description = "Run tests"
+[tasks."lint:vet"]
+description = "Run go vet"
+run = "go vet ./..."
+
+[tasks.lint]
+description = "Lint all"
+depends = ["lint:*"]
+
+[tasks."test:go"]
+description = "Run Go tests"
 run = "go test -count=1 ./..."
 
-[tasks."test:smoke"]
+[tasks.test]
+description = "Run all tests"
+depends = ["test:*"]
+
+[tasks."build:hk"]
+description = "Build hk binary into bin/hk"
+run = "go build -o bin/hk ./cmd/hk"
+
+[tasks.build]
+description = "Build all binaries"
+depends = ["build:*"]
+
+[tasks.smoke]
 description = "One-shot top list smoke"
 depends = ["build"]
 run = "./bin/hk top -n 5"
 
 [tasks.ci]
-description = "tidy + format check + test + build"
-run = """
-go mod tidy
-test -z "$(gofmt -l .)"
-go test -count=1 ./...
-go build -o bin/hk ./cmd/hk
-"""
+description = "install, fmt, lint, test, build"
+depends = ["install", "fmt", "lint", "test", "build"]
 
-[tasks.release]
-description = "Tag with svu and publish via goreleaser"
-depends = ["ci"]
+[tasks."release:tag"]
+description = "Create git tag from svu bump"
 usage = '''
 arg "<version>" help="New version" {
   choices "next" "major" "minor" "patch"
   default "next"
 }
 '''
-run = '''
-git tag "$(svu ${usage_version})"
-goreleaser release --clean
+run = "git tag $(svu ${usage_version})"
+
+[tasks."release:publish"]
+description = "Publish GitHub release with goreleaser"
+run = "goreleaser release --clean"
+
+[tasks.release]
+description = "CI, tag with svu, publish with goreleaser"
+depends = ["ci", "release:tag"]
+usage = '''
+arg "<version>" help="New version" {
+  choices "next" "major" "minor" "patch"
+  default "next"
+}
 '''
+run = "goreleaser release --clean"

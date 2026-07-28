@@ -51,8 +51,9 @@ hk kill chrome --dry-run
 ## Development
 
 ```bash
-mise run ci           # tidy + test + build
-mise run test:smoke   # hk top -n 5
+mise run ci      # install, fmt, lint, test, build
+mise run smoke   # hk top -n 5
+mise run fmt     # fmt:* (go fmt)
 ```
 
 ## Release
