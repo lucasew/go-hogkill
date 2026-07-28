@@ -57,27 +57,16 @@ run = "./bin/hk top -n 5"
 description = "install, fmt, lint, test, build"
 depends = ["install", "fmt", "lint", "test", "build"]
 
-[tasks."release:tag"]
-description = "Create git tag from svu bump"
-usage = '''
-arg "<version>" help="New version" {
-  choices "next" "major" "minor" "patch"
-  default "next"
-}
-'''
-run = "git tag $(svu ${usage_version})"
-
-[tasks."release:publish"]
-description = "Publish GitHub release with goreleaser"
-run = "goreleaser release --clean"
-
 [tasks.release]
-description = "CI, tag with svu, publish with goreleaser"
-depends = ["ci", "release:tag"]
+description = "Tag with svu and publish with goreleaser"
+depends = ["ci"]
 usage = '''
 arg "<version>" help="New version" {
   choices "next" "major" "minor" "patch"
   default "next"
 }
 '''
-run = "goreleaser release --clean"
+run = [
+  "git tag $(svu ${usage_version})",
+  "goreleaser release --clean",
+]
