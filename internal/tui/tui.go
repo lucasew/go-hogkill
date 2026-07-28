@@ -128,7 +128,7 @@ func Run(opts Options) error {
 		totalMem: total,
 	}
 
-	p := tea.NewProgram(m, tea.WithAltScreen())
+	p := tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseCellMotion())
 	_, err := p.Run()
 	return err
 }
@@ -179,8 +179,66 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.busy = true
 		return m, m.sampleCmd()
 
+	case tea.MouseMsg:
+		return m.handleMouse(msg)
+
 	case tea.KeyMsg:
 		return m.handleKey(msg)
+	}
+	return m, nil
+}
+
+func (m model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
+	if m.mode != modeList {
+		// click dismisses help; ignore elsewhere
+		if m.mode == modeHelp && msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
+			m.mode = modeList
+		}
+		return m, nil
+	}
+
+	switch msg.Button {
+	case tea.MouseButtonWheelUp:
+		if msg.Action == tea.MouseActionPress {
+			m.move(-3)
+		}
+		return m, nil
+	case tea.MouseButtonWheelDown:
+		if msg.Action == tea.MouseActionPress {
+			m.move(3)
+		}
+		return m, nil
+	}
+
+	if msg.Action != tea.MouseActionPress || msg.Button != tea.MouseButtonLeft {
+		return m, nil
+	}
+
+	// Layout: 0 header, 1 rule, 2 columns, 3.. body
+	const colRow = 2
+	const bodyStart = 3
+	if msg.Y == colRow {
+		if key, ok := m.colLayout().hit(msg.X); ok {
+			m.reorder(key)
+			m.flash("sort " + string(key))
+		}
+		return m, nil
+	}
+	if msg.Y >= bodyStart {
+		body := m.viewportHeight()
+		offset := m.scrollOffset(body)
+		row := offset + (msg.Y - bodyStart)
+		if row >= 0 && row < len(m.rows) {
+			m.cursor = row
+			m.offset = offset
+			// keep cursor visible after click
+			if m.cursor < m.offset {
+				m.offset = m.cursor
+			}
+			if m.cursor >= m.offset+body {
+				m.offset = m.cursor - body + 1
+			}
+		}
 	}
 	return m, nil
 }
@@ -274,10 +332,13 @@ func (m model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	case "s":
 		m.cycleSort()
+		m.flash("sort " + string(m.sort))
 	case "c":
 		m.reorder(proc.SortCPU)
+		m.flash("sort cpu")
 	case "m":
 		m.reorder(proc.SortMem)
+		m.flash("sort mem")
 	case "/":
 		m.mode = modeFilter
 		m.filterIn.SetValue(m.filter)
@@ -585,6 +646,70 @@ func (m model) viewportHeight() int {
 	return max(1, m.height-6)
 }
 
+func (m model) scrollOffset(body int) int {
+	offset := m.offset
+	if m.cursor < offset {
+		offset = m.cursor
+	}
+	if m.cursor >= offset+body {
+		offset = m.cursor - body + 1
+	}
+	return clamp(offset, 0, max(0, len(m.rows)-body))
+}
+
+// colSpan is one clickable header segment.
+type colSpan struct {
+	key   proc.SortKey // empty = not sortable
+	label string
+	width int
+	start int
+}
+
+type colLayout struct {
+	prefix int
+	spans  []colSpan
+}
+
+func (m model) colLayout() colLayout {
+	withUser := m.width >= 100 && proc.SupportsUsers
+	nameW := max(14, m.width-60)
+	if !withUser {
+		nameW = max(14, m.width-50)
+	}
+	// "❯[ ] " = 5 cells of chrome before NAME
+	const prefix = 5
+	x := prefix
+	spans := []colSpan{
+		{key: proc.SortName, label: "NAME", width: nameW, start: x},
+	}
+	x += nameW
+	spans = append(spans, colSpan{key: proc.SortCPU, label: "CPU", width: 7, start: x})
+	x += 7
+	spans = append(spans, colSpan{key: proc.SortMem, label: "MEMORY", width: 11, start: x})
+	x += 11
+	spans = append(spans, colSpan{key: proc.SortCount, label: "PROCS·AGE", width: 9, start: x})
+	x += 9 + 2 // gap before RISK
+	spans = append(spans, colSpan{key: "", label: "RISK", width: 8, start: x})
+	x += 8
+	if withUser {
+		x++ // space
+		spans = append(spans, colSpan{key: "", label: "USER", width: 10, start: x})
+	}
+	return colLayout{prefix: prefix, spans: spans}
+}
+
+func (c colLayout) hit(x int) (proc.SortKey, bool) {
+	for _, s := range c.spans {
+		if s.key == "" {
+			continue
+		}
+		if x >= s.start && x < s.start+s.width {
+			return s.key, true
+		}
+	}
+	return "", false
+}
+
 func (m model) View() string {
 	if m.width == 0 {
 		return ""
@@ -610,14 +735,7 @@ func (m model) View() string {
 				scaleRSS = g.RSS
 			}
 		}
-		offset := m.offset
-		if m.cursor < offset {
-			offset = m.cursor
-		}
-		if m.cursor >= offset+body {
-			offset = m.cursor - body + 1
-		}
-		offset = clamp(offset, 0, max(0, len(m.rows)-body))
+		offset := m.scrollOffset(body)
 
 		slice := m.rows[offset:min(offset+body, len(m.rows))]
 		for i, r := range slice {
@@ -695,16 +813,43 @@ func (m model) header() string {
 }
 
 func (m model) columns() string {
-	withUser := m.width >= 100 && proc.SupportsUsers
-	nameW := max(14, m.width-60)
-	if !withUser {
-		nameW = max(14, m.width-50)
+	layout := m.colLayout()
+	active := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("6")).Underline(true)
+	idle := lipgloss.NewStyle().Faint(true)
+	var b strings.Builder
+	b.WriteString(idle.Render(strings.Repeat(" ", layout.prefix)))
+	prevEnd := layout.prefix
+	for i, s := range layout.spans {
+		if s.start > prevEnd {
+			b.WriteString(idle.Render(strings.Repeat(" ", s.start-prevEnd)))
+		}
+		label := s.label
+		// right-align numeric columns the way data cells do
+		var cell string
+		switch s.key {
+		case proc.SortCPU, proc.SortMem, proc.SortCount:
+			cell = render.PadStart(label, s.width)
+		default:
+			cell = render.Fit(label, s.width)
+		}
+		if s.key != "" && s.key == m.sort {
+			// mark active sort with a caret on the label
+			mark := "▾" + label
+			if s.key == proc.SortCPU || s.key == proc.SortMem || s.key == proc.SortCount {
+				cell = render.PadStart(mark, s.width)
+			} else {
+				cell = render.Fit(mark, s.width)
+			}
+			b.WriteString(active.Render(cell))
+		} else if s.key != "" {
+			b.WriteString(idle.Render(cell))
+		} else {
+			b.WriteString(idle.Render(cell))
+		}
+		prevEnd = s.start + s.width
+		_ = i
 	}
-	line := render.Fit("NAME", nameW) + render.PadStart("CPU", 7) + render.PadStart("MEMORY", 11) + render.PadStart("PROCS·AGE", 9) + "  " + render.Fit("RISK", 8)
-	if withUser {
-		line += " " + render.Fit("USER", 10)
-	}
-	return lipgloss.NewStyle().Faint(true).Render("     " + line)
+	return b.String()
 }
 
 func (m model) renderRow(r row, active bool, scaleCPU float64, scaleRSS uint64) string {
@@ -781,22 +926,30 @@ func (m model) renderRow(r row, active bool, scaleCPU float64, scaleRSS uint64) 
 	return line
 }
 
+// bkey bolds the shortcut letter and leaves the rest plain, e.g. bkey("s","ort") → **s**ort
+func bkey(key, rest string) string {
+	return lipgloss.NewStyle().Bold(true).Render(key) + rest
+}
+
 func (m model) helpBody(height int) string {
+	dim := lipgloss.NewStyle().Faint(true)
 	lines := []string{
 		"",
-		"  navigate  ↑↓ / kj move · →← / lh expand · g G top/bottom",
+		"  navigate  ↑↓ / " + bkey("k", "") + bkey("j", "") + " move · →← / " + bkey("l", "") + bkey("h", "") + " expand · " + bkey("g", "") + " / " + bkey("G", "") + " top/bottom",
+		"            click a row to focus · wheel to scroll",
 		"",
-		"  act       space select · a select all · x clear",
-		"            d kill (SIGTERM then SIGKILL) · D force kill",
+		"  act       " + bkey("space", "") + " select · " + bkey("a", "") + " select all · " + bkey("x", "") + " clear",
+		"            " + bkey("d", "") + " kill (SIGTERM then SIGKILL) · " + bkey("D", "") + " force kill",
 		"",
-		"  view      / filter · s cycle sort · c cpu · m memory · p pin · q quit",
+		"  view      " + bkey("/", "") + " filter · " + bkey("s", "ort") + " cycle · " + bkey("c", "pu") + " · " + bkey("m", "em") + " · " + bkey("p", "in") + " · " + bkey("q", "uit"),
+		"            click column headers (NAME / CPU / MEMORY / PROCS) to sort",
 		"",
 		"  order     ● live only at top with nothing selected",
 		"            ⏸ held when you move — numbers update, rows stay",
 		"",
 		"  risk      critical / system / you — never blocks a kill",
 		"",
-		"  press any key to go back",
+		dim.Render("  press any key to go back"),
 	}
 	if height < len(lines) {
 		lines = lines[:height]
@@ -823,7 +976,8 @@ func (m model) status() string {
 		if m.confirm.risk != proc.RiskNone {
 			headline = "kill " + proc.RiskWord[m.confirm.risk]
 		}
-		lines = append(lines, fmt.Sprintf("%s%s %s · %s?  y yes · K force · n cancel", prefix, headline, m.confirm.label, verb))
+		keys := bkey("y", "") + " yes · " + bkey("K", "") + " force · " + bkey("n", "") + " cancel"
+		lines = append(lines, fmt.Sprintf("%s%s %s · %s?  %s", prefix, headline, m.confirm.label, verb, keys))
 		return strings.Join(lines, "\n")
 	}
 	if m.mode == modeFilter {
@@ -836,11 +990,17 @@ func (m model) status() string {
 	if len(m.selected) > 0 {
 		sel = lipgloss.NewStyle().Foreground(lipgloss.Color("1")).Render(fmt.Sprintf("%d selected · ", len(m.selected)))
 	}
+	hints := lipgloss.NewStyle().Faint(true)
 	if m.held() {
 		return sel + lipgloss.NewStyle().Foreground(lipgloss.Color("3")).Render("rows held still") +
-			lipgloss.NewStyle().Faint(true).Render(" · g top to re-rank · space select · d kill · / filter · ? help · q quit")
+			hints.Render(" · ") + bkey("g", "") + hints.Render(" top to re-rank · space select · ") +
+			bkey("d", "") + hints.Render(" kill · ") + bkey("/", "") + hints.Render(" filter · ") +
+			bkey("?", "") + hints.Render(" help · ") + bkey("q", "") + hints.Render(" quit")
 	}
-	return sel + lipgloss.NewStyle().Faint(true).Render("↑↓ move · → expand · space select · d kill · / filter · s sort · ? help · q quit")
+	return sel +
+		hints.Render("↑↓ move · → expand · space select · ") +
+		bkey("d", "") + hints.Render(" kill · ") + bkey("/", "") + hints.Render(" filter · ") +
+		bkey("s", "ort") + hints.Render(" · click headers · ") + bkey("?", "") + hints.Render(" help · ") + bkey("q", "") + hints.Render(" quit")
 }
 
 func plural(n int) string {

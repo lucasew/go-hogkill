@@ -43,6 +43,7 @@ hk kill chrome --dry-run
 | d / D | kill / force kill |
 | / | filter |
 | s c m | sort cycle / cpu / mem |
+| click header | sort by NAME / CPU / MEMORY / PROCS |
 | p | pin order |
 | g G | top / bottom |
 | ? q | help / quit |
