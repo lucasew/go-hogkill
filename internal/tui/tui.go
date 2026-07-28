@@ -73,29 +73,29 @@ type killDoneMsg struct {
 }
 
 type model struct {
-	opts     Options
-	sampler  *proc.Sampler
-	groups   []proc.Group
-	rows     []row
-	order    []string
-	procOrd  map[string][]int32
-	cursor   int
-	offset   int
-	selected map[string]struct{}
-	expanded map[string]struct{}
-	sort     proc.SortKey
-	pinned   bool
-	filter   string
-	mode     mode
-	confirm  *confirmState
-	width    int
-	height   int
-	toast    string
+	opts       Options
+	sampler    *proc.Sampler
+	groups     []proc.Group
+	rows       []row
+	order      []string
+	procOrd    map[string][]int32
+	cursor     int
+	offset     int
+	selected   map[string]struct{}
+	expanded   map[string]struct{}
+	sort       proc.SortKey
+	pinned     bool
+	filter     string
+	mode       mode
+	confirm    *confirmState
+	width      int
+	height     int
+	toast      string
 	toastUntil time.Time
-	procCount int
-	filterIn  textinput.Model
-	busy     bool
-	totalMem uint64
+	procCount  int
+	filterIn   textinput.Model
+	busy       bool
+	totalMem   uint64
 }
 
 // Run starts the interactive program.
@@ -769,7 +769,7 @@ func (m model) header() string {
 	}
 	right := lipgloss.NewStyle().Faint(true).Render(fmt.Sprintf("%s · sort %s", state, m.sort))
 	if m.filter != "" {
-		right += lipgloss.NewStyle().Faint(true).Render(" · /"+m.filter)
+		right += lipgloss.NewStyle().Faint(true).Render(" · /" + m.filter)
 	}
 
 	var used uint64

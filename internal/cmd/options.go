@@ -11,22 +11,22 @@ import (
 
 // Options are shared CLI settings.
 type Options struct {
-	Sort      proc.SortKey
-	Interval  time.Duration
-	Top       int
-	MinCPU    float64
-	MinMemMB  float64
-	User      string
-	Me        bool
-	Filter    string
-	SafeOnly  bool
-	NoColor   bool
-	DryRun    bool
-	Flat      bool
-	JSON      bool
-	Yes       bool
-	Force     bool
-	Escalate  time.Duration
+	Sort     proc.SortKey
+	Interval time.Duration
+	Top      int
+	MinCPU   float64
+	MinMemMB float64
+	User     string
+	Me       bool
+	Filter   string
+	SafeOnly bool
+	NoColor  bool
+	DryRun   bool
+	Flat     bool
+	JSON     bool
+	Yes      bool
+	Force    bool
+	Escalate time.Duration
 }
 
 func defaultOptions() Options {
