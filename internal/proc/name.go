@@ -77,7 +77,7 @@ func scriptArgument(command, exe string) string {
 		rest = command[len(exe):]
 	}
 	exeBase := BaseName(exe)
-	for _, part := range strings.Fields(strings.TrimSpace(rest)) {
+	for part := range strings.FieldsSeq(strings.TrimSpace(rest)) {
 		if part == "" || strings.HasPrefix(part, "-") {
 			continue
 		}
