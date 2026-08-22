@@ -536,15 +536,7 @@ func (m *model) reorder(sort proc.SortKey) {
 	m.groups = proc.SortGroups(m.groups, sort)
 	for i := range m.groups {
 		// procs stay cpu-sorted
-		ps := m.groups[i].Procs
-		for a := 0; a < len(ps); a++ {
-			for b := a + 1; b < len(ps); b++ {
-				if ps[b].CPU > ps[a].CPU || (ps[b].CPU == ps[a].CPU && ps[b].RSS > ps[a].RSS) {
-					ps[a], ps[b] = ps[b], ps[a]
-				}
-			}
-		}
-		m.groups[i].Procs = ps
+		proc.SortProcs(m.groups[i].Procs)
 	}
 	m.rememberOrder(m.groups)
 	m.rebuildRows()

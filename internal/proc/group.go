@@ -46,12 +46,7 @@ func GroupProcesses(procs []Proc, opt GroupOptions) []Group {
 			continue
 		}
 
-		sort.Slice(members, func(i, j int) bool {
-			if members[i].CPU != members[j].CPU {
-				return members[i].CPU > members[j].CPU
-			}
-			return members[i].RSS > members[j].RSS
-		})
+		SortProcs(members)
 
 		user := ""
 		if len(members) > 0 {
@@ -139,6 +134,16 @@ func SortGroups(groups []Group, key SortKey) []Group {
 		})
 	}
 	return out
+}
+
+// SortProcs ranks processes by live CPU, then RSS.
+func SortProcs(procs []Proc) {
+	sort.Slice(procs, func(i, j int) bool {
+		if procs[i].CPU != procs[j].CPU {
+			return procs[i].CPU > procs[j].CPU
+		}
+		return procs[i].RSS > procs[j].RSS
+	})
 }
 
 // CollectWarnings one warning per distinct consequence, worst first.
