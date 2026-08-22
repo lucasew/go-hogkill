@@ -30,3 +30,15 @@ func TestSortGroupsCPU(t *testing.T) {
 		t.Fatalf("want b first, got %s", out[0].Name)
 	}
 }
+
+func TestSortProcsCPUThenRSS(t *testing.T) {
+	ps := []Proc{
+		{Name: "low", CPU: 1, RSS: 100},
+		{Name: "tie-small", CPU: 5, RSS: 10},
+		{Name: "tie-big", CPU: 5, RSS: 50},
+	}
+	SortProcs(ps)
+	if ps[0].Name != "tie-big" || ps[1].Name != "tie-small" || ps[2].Name != "low" {
+		t.Fatalf("got %s, %s, %s", ps[0].Name, ps[1].Name, ps[2].Name)
+	}
+}
