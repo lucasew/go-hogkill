@@ -28,21 +28,31 @@ func BaseName(path string) string {
 	return base
 }
 
-// DisplayName short label for a single process.
-func DisplayName(command, exe string) string {
+func exeBase(command, exe string) string {
 	base := BaseName(exe)
 	if base == "" || base == "." {
-		base = command
+		return command
 	}
+	return base
+}
+
+func withScript(base, command, exe string) string {
+	if _, ok := interpreters[base]; !ok {
+		return base
+	}
+	if script := scriptArgument(command, exe); script != "" {
+		return base + " " + script
+	}
+	return base
+}
+
+// DisplayName short label for a single process.
+func DisplayName(command, exe string) string {
+	base := exeBase(command, exe)
 	if bundle := AppBundle(exe); bundle != "" && bundle != base {
 		return base + " — " + bundle
 	}
-	if _, ok := interpreters[base]; ok {
-		if script := scriptArgument(command, exe); script != "" {
-			return base + " " + script
-		}
-	}
-	return base
+	return withScript(base, command, exe)
 }
 
 // GroupName label shared by every process in the same app.
@@ -50,16 +60,7 @@ func GroupName(command, exe string) string {
 	if bundle := AppBundle(exe); bundle != "" {
 		return bundle
 	}
-	base := BaseName(exe)
-	if base == "" || base == "." {
-		base = command
-	}
-	if _, ok := interpreters[base]; ok {
-		if script := scriptArgument(command, exe); script != "" {
-			return base + " " + script
-		}
-	}
-	return base
+	return withScript(exeBase(command, exe), command, exe)
 }
 
 // AppBundle outermost .app name on macOS-style paths.
