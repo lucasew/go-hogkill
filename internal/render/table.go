@@ -32,11 +32,7 @@ func WriteTable(w io.Writer, groups []proc.Group, opt TableOptions) {
 		userHeader(withUser),
 	)
 
-	n := opt.Top
-	if n <= 0 || n > len(groups) {
-		n = len(groups)
-	}
-	shown := groups[:n]
+	shown := limitTop(groups, opt.Top)
 	risky := false
 	for _, g := range shown {
 		if g.Risk != proc.RiskNone {
@@ -81,4 +77,12 @@ func userCell(with bool, user string) string {
 		return user
 	}
 	return ""
+}
+
+// limitTop returns the first n groups. n <= 0 means no cap.
+func limitTop(groups []proc.Group, n int) []proc.Group {
+	if n <= 0 || n > len(groups) {
+		return groups
+	}
+	return groups[:n]
 }

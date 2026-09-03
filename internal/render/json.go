@@ -29,11 +29,9 @@ type jsonGroup struct {
 
 // WriteJSON emits groups as indented JSON.
 func WriteJSON(w io.Writer, groups []proc.Group, top int) error {
-	if top <= 0 || top > len(groups) {
-		top = len(groups)
-	}
-	payload := make([]jsonGroup, 0, top)
-	for _, g := range groups[:top] {
+	shown := limitTop(groups, top)
+	payload := make([]jsonGroup, 0, len(shown))
+	for _, g := range shown {
 		jp := make([]jsonProc, 0, len(g.Procs))
 		for _, p := range g.Procs {
 			jp = append(jp, jsonProc{
