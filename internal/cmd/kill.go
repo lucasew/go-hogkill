@@ -84,14 +84,14 @@ func runKill(cmd *cobra.Command, opts Options, pattern string) error {
 		reclaimed += p.RSS
 	}
 	fmt.Fprintf(cmd.OutOrStdout(), "about to kill %d process%s · %s\n",
-		len(procs), processPlural(len(procs)), render.Bytes(reclaimed))
+		len(procs), render.PluralSuffix(len(procs), "es"), render.Bytes(reclaimed))
 	for _, b := range batches {
 		var size uint64
 		for _, p := range b.Procs {
 			size += p.RSS
 		}
 		fmt.Fprintf(cmd.OutOrStdout(), "  %-9s %s — %d proc%s, %s\n",
-			proc.RiskTag[b.Risk], b.Name, len(b.Procs), plural(len(b.Procs)), render.Bytes(size))
+			proc.RiskTag[b.Risk], b.Name, len(b.Procs), render.PluralSuffix(len(b.Procs), "s"), render.Bytes(size))
 	}
 	printWarnings(cmd, procs)
 
@@ -152,20 +152,6 @@ func printWarnings(cmd *cobra.Command, procs []proc.Proc) {
 		fmt.Fprintf(cmd.OutOrStdout(), "  %-9s %s — %s\n", proc.RiskTag[w.Level], w.Name, w.Reason)
 	}
 	fmt.Fprintln(cmd.OutOrStdout())
-}
-
-func plural(n int) string {
-	if n == 1 {
-		return ""
-	}
-	return "s"
-}
-
-func processPlural(n int) string {
-	if n == 1 {
-		return ""
-	}
-	return "es"
 }
 
 type errExit struct{ code int }

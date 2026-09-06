@@ -590,7 +590,7 @@ func (m *model) requestKill(force bool) {
 			subject = n
 		}
 	}
-	label := fmt.Sprintf("%s · %d process%s · %s", subject, len(list), plural(len(list)), render.Bytes(reclaimed))
+	label := fmt.Sprintf("%s · %d process%s · %s", subject, len(list), render.PluralSuffix(len(list), "es"), render.Bytes(reclaimed))
 	m.confirm = &confirmState{
 		targets:  targets,
 		subject:  subject,
@@ -993,13 +993,6 @@ func (m model) status() string {
 		hints.Render("↑↓ move · → expand · space select · ") +
 		bkey("d", "") + hints.Render(" kill · ") + bkey("/", "") + hints.Render(" filter · ") +
 		bkey("s", "ort") + hints.Render(" · click headers · ") + bkey("?", "") + hints.Render(" help · ") + bkey("q", "") + hints.Render(" quit")
-}
-
-func plural(n int) string {
-	if n == 1 {
-		return ""
-	}
-	return "es"
 }
 
 func clamp(v, lo, hi int) int {
