@@ -98,3 +98,11 @@ func PadStart(text string, width int) string {
 	}
 	return strings.Repeat(" ", width-len(r)) + text
 }
+
+// PluralSuffix is empty when n==1, otherwise suffix ("s", "es").
+func PluralSuffix(n int, suffix string) string {
+	if n == 1 {
+		return ""
+	}
+	return suffix
+}
