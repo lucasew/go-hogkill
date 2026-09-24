@@ -1,6 +1,7 @@
 package proc
 
 import (
+	"cmp"
 	"sort"
 	"strings"
 )
@@ -109,17 +110,11 @@ func SortGroups(groups []Group, key SortKey) []Group {
 	switch key {
 	case SortMem:
 		sort.Slice(out, func(i, j int) bool {
-			if out[i].RSS != out[j].RSS {
-				return out[i].RSS > out[j].RSS
-			}
-			return out[i].CPU > out[j].CPU
+			return descTie(out[i].RSS, out[j].RSS, out[i].CPU, out[j].CPU)
 		})
 	case SortCount:
 		sort.Slice(out, func(i, j int) bool {
-			if len(out[i].Procs) != len(out[j].Procs) {
-				return len(out[i].Procs) > len(out[j].Procs)
-			}
-			return out[i].RSS > out[j].RSS
+			return descTie(len(out[i].Procs), len(out[j].Procs), out[i].RSS, out[j].RSS)
 		})
 	case SortName:
 		sort.Slice(out, func(i, j int) bool {
@@ -127,10 +122,7 @@ func SortGroups(groups []Group, key SortKey) []Group {
 		})
 	default: // cpu
 		sort.Slice(out, func(i, j int) bool {
-			if out[i].CPU != out[j].CPU {
-				return out[i].CPU > out[j].CPU
-			}
-			return out[i].RSS > out[j].RSS
+			return descTie(out[i].CPU, out[j].CPU, out[i].RSS, out[j].RSS)
 		})
 	}
 	return out
@@ -139,11 +131,16 @@ func SortGroups(groups []Group, key SortKey) []Group {
 // SortProcs ranks processes by live CPU, then RSS.
 func SortProcs(procs []Proc) {
 	sort.Slice(procs, func(i, j int) bool {
-		if procs[i].CPU != procs[j].CPU {
-			return procs[i].CPU > procs[j].CPU
-		}
-		return procs[i].RSS > procs[j].RSS
+		return descTie(procs[i].CPU, procs[j].CPU, procs[i].RSS, procs[j].RSS)
 	})
+}
+
+// descTie reports a higher-primary, then higher-tie ordering.
+func descTie[P, T cmp.Ordered](primaryA, primaryB P, tieA, tieB T) bool {
+	if primaryA != primaryB {
+		return primaryA > primaryB
+	}
+	return tieA > tieB
 }
 
 // CollectWarnings one warning per distinct consequence, worst first.
